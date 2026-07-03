@@ -1,0 +1,34 @@
+# Hạ tầng PROD/đầy đủ: PostgreSQL + Redis + MinIO.
+# Dev nhanh không cần file này (mặc định SQLite + disk). Xem quickstart.md.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: enshido
+      POSTGRES_PASSWORD: enshido
+      POSTGRES_DB: enshido
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: enshido
+      MINIO_ROOT_PASSWORD: enshido123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+volumes:
+  pgdata:
+  miniodata:

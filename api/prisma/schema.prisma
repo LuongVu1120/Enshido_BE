@@ -1,0 +1,431 @@
+// ENSHIDO — Data model MVP (12 bảng, theo plan.md mục "Data Model").
+// Dev: SQLite (zero-infra). Prod: đổi provider = "postgresql" + DATABASE_URL Postgres,
+// rồi `prisma migrate dev` sinh migration cho Postgres. Các trường "enum" lưu dạng String
+// (validate ở code theo @enshido/types) để schema portable giữa SQLite ↔ Postgres.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Người dùng & vai trò ───────────────────────────────────────────────────
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  phone        String?
+  email        String   @unique
+  passwordHash String
+  role         String // @enshido/types Role
+  status       String   @default("ACTIVE") // ACTIVE | LOCKED
+  employeeId   String?  @unique // liên kết tùy chọn tới hồ sơ nhân viên (Phase 004)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  employee     Employee? @relation(fields: [employeeId], references: [id])
+
+  ordersCreated   Order[]            @relation("OrderCreatedBy")
+  stepsAssigned   ProductionStep[]   @relation("StepAssignedTo")
+  stepsPerformed  ProductionStep[]   @relation("StepPerformedBy")
+  batchesPerformed ProductionBatch[] @relation("BatchPerformedBy")
+  qcRecords       QCRecord[]         @relation("QCUser")
+  reworkAssigned  QCRecord[]         @relation("ReworkUser")
+  weightLogs      WeightLog[]
+  activityLogs    ActivityLog[]
+  attachments     Attachment[]
+  inventoryTxns   InventoryTransaction[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Role {
+  id          String @id @default(cuid())
+  name        String @unique // @enshido/types Role
+  label       String
+  permissions String @default("[]") // JSON array
+  createdAt   DateTime @default(now())
+
+  @@map("roles")
+}
+
+// ─── Hồ sơ nhân viên (Phase 004) — bảng RIÊNG, độc lập tài khoản ─────────────
+model Employee {
+  id         String    @id @default(cuid())
+  code       String    @unique // NV-####
+  name       String
+  phone      String?
+  email      String?
+  department String?
+  position   String?
+  joinDate   DateTime?
+  status     String    @default("ACTIVE") // EmployeeStatus: ACTIVE | ON_LEAVE | RESIGNED
+  skills     String? // CSV kỹ năng
+  note       String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user User? // tài khoản đăng nhập (tùy chọn) — User.employeeId
+
+  @@index([department])
+  @@map("employees")
+}
+
+// ─── Khách hàng ─────────────────────────────────────────────────────────────
+model Customer {
+  id           String   @id @default(cuid())
+  code         String   @unique // KH-######
+  name         String
+  phone        String?
+  address      String?
+  channel      String? // SalesChannel
+  customerType String? // VIP | Sỉ | Lẻ ...
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([name])
+  @@map("customers")
+}
+
+// ─── Đơn hàng ───────────────────────────────────────────────────────────────
+model Order {
+  id           String    @id @default(cuid())
+  code         String    @unique // SX-YYYYMMDD-####
+  name         String? // tên đơn dễ đọc (Phase 010); trống → hiển thị code
+  customerId   String
+  salesChannel String? // SalesChannel
+  orderType    String    @default("MADE_TO_ORDER") // OrderType
+  status       String    @default("WAITING_PRODUCTION") // OrderStatus
+  priority     String    @default("NORMAL") // OrderPriority
+  deadline     DateTime?
+  note         String?
+  createdById  String?
+  qrToken      String    @unique // token QR (không nhúng dữ liệu nhạy cảm)
+  qrActive     Boolean   @default(true)
+  ticketCode   String? // PSX-YYYYMMDD-#### (sinh khi in phiếu)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  customer     Customer         @relation(fields: [customerId], references: [id])
+  createdBy    User?            @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  items        OrderItem[]
+  steps        ProductionStep[]
+  qcRecords    QCRecord[]
+  weightLogs   WeightLog[]
+  attachments  Attachment[]
+  activityLogs ActivityLog[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([deadline])
+  @@map("orders")
+}
+
+model OrderItem {
+  id            String  @id @default(cuid())
+  orderId       String
+  productCode   String?
+  productName   String
+  category      String?
+  quantity      Int     @default(1)
+  material      String?
+  stoneType     String?
+  stoneSize     String?
+  size          String?
+  platingColor  String?
+  imageUrl      String?
+  technicalNote String?
+  initialWeight Float? // TL nguyên liệu ban đầu (g) — mốc lũy kế
+  currentWeight Float? // TL hiện tại (g)
+
+  order      Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  steps      ProductionStep[]
+  qcRecords  QCRecord[]
+  weightLogs WeightLog[]
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+// ─── Công đoạn sản xuất ─────────────────────────────────────────────────────
+model ProductionStep {
+  id                String    @id @default(cuid())
+  orderId           String
+  orderItemId       String?
+  batchId           String? // thuộc lô sản xuất nào (Phase 011 — Đúc/Xi mạ theo mẻ)
+  stepName          String // StepName
+  stepOrder         Int
+  assignedToId      String? // người được gán (kế hoạch)
+  performedById     String? // người thực hiện thực tế (ai quét QR & thao tác) — Phase 007
+  status            String    @default("NOT_STARTED") // StepStatus
+  startedAt         DateTime?
+  completedAt       DateTime?
+  inputQuantity     Int?
+  completedQuantity Int?
+  defectQuantity    Int?
+  inputWeight       Float?
+  outputWeight      Float?
+  lossWeight        Float?
+  lossPercent       Float?
+  reworkCount       Int       @default(0)
+  issueNote         String?
+  version           Int       @default(0) // optimistic lock (chống ghi đè đồng thời)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  order            Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem        OrderItem?       @relation(fields: [orderItemId], references: [id])
+  batch            ProductionBatch? @relation(fields: [batchId], references: [id])
+  assignedTo       User?            @relation("StepAssignedTo", fields: [assignedToId], references: [id])
+  performedBy      User?            @relation("StepPerformedBy", fields: [performedById], references: [id])
+  qcReturnsToHere  QCRecord[]       @relation("QCReturnStep")
+
+  @@index([orderId])
+  @@index([assignedToId])
+  @@index([performedById])
+  @@index([batchId])
+  @@index([stepName, status])
+  @@map("production_steps")
+}
+
+// ─── Lô sản xuất (Phase 011) — gom nhiều đơn cùng công đoạn (Đúc/Xi mạ) ─────
+model ProductionBatch {
+  id                 String    @id @default(cuid())
+  code               String    @unique // LSX-YYYYMMDD-####
+  stepName           String // StepName của lô (CASTING | PLATING | ...)
+  status             String    @default("OPEN") // BatchStatus: OPEN | DONE | CANCELLED
+  performedById      String? // người chạy lô (được tín công) — Phase 007
+  totalInputWeight   Float? // tổng KL vào (g)
+  totalOutputWeight  Float? // tổng KL ra cân sau lô (g)
+  totalLossWeight    Float? // tổng hao hụt (g) = vào − ra
+  allowedLossPercent Float     @default(3)
+  note               String?
+  createdAt          DateTime  @default(now())
+  closedAt           DateTime?
+
+  performedBy User?            @relation("BatchPerformedBy", fields: [performedById], references: [id])
+  steps       ProductionStep[]
+
+  @@index([status])
+  @@index([stepName])
+  @@map("production_batches")
+}
+
+// ─── QC ─────────────────────────────────────────────────────────────────────
+model QCRecord {
+  id                   String    @id @default(cuid())
+  orderId              String
+  orderItemId          String?
+  qcUserId             String
+  result               String // QCResult
+  defectType           String?
+  severity             String? // DefectSeverity
+  returnStepId         String?
+  assignedReworkUserId String?
+  reworkDeadline       DateTime?
+  imageUrls            String    @default("[]") // JSON array
+  checklist            String?   // JSON: kết quả bộ tiêu chí kiểm (Phase 009)
+  note                 String?
+  attempt              Int       @default(1) // lần kiểm thứ mấy
+  createdAt            DateTime  @default(now())
+
+  order        Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem    OrderItem?      @relation(fields: [orderItemId], references: [id])
+  qcUser       User            @relation("QCUser", fields: [qcUserId], references: [id])
+  returnStep   ProductionStep? @relation("QCReturnStep", fields: [returnStepId], references: [id])
+  reworkUser   User?           @relation("ReworkUser", fields: [assignedReworkUserId], references: [id])
+
+  @@index([orderId])
+  @@map("qc_records")
+}
+
+// ─── Cân & hao hụt (bất biến — không update) ────────────────────────────────
+model WeightLog {
+  id                    String   @id @default(cuid())
+  orderId               String
+  orderItemId           String?
+  productionStepId      String?
+  stageName             String
+  previousWeight        Float
+  currentWeight         Float
+  lossWeight            Float
+  lossPercent           Float
+  cumulativeLossWeight  Float
+  cumulativeLossPercent Float
+  allowedLossPercent    Float
+  exceedsAllowed        Boolean  @default(false)
+  measuredById          String
+  note                  String?
+  measuredAt            DateTime @default(now())
+
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem  OrderItem? @relation(fields: [orderItemId], references: [id])
+  measuredBy User       @relation(fields: [measuredById], references: [id])
+
+  @@index([orderId])
+  @@map("weight_logs")
+}
+
+// ─── Nhà cung cấp (Phase 002) ───────────────────────────────────────────────
+model Supplier {
+  id        String   @id @default(cuid())
+  code      String   @unique // NCC-######
+  name      String
+  phone     String?
+  address   String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  items        InventoryItem[]
+  transactions InventoryTransaction[]
+
+  @@map("suppliers")
+}
+
+// ─── Tồn kho (Phase 002 — đầy đủ) ───────────────────────────────────────────
+model InventoryItem {
+  id           String   @id @default(cuid())
+  code         String   @unique // VT-######
+  name         String
+  group        String? // InventoryGroup (7 nhóm kho)
+  category     String?
+  unit         String?
+  currentStock Float    @default(0)
+  minStock     Float    @default(0)
+  maxStock     Float?
+  costPrice    Float?
+  location     String?
+  supplierId   String?
+  status       String   @default("NORMAL")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  supplier     Supplier?              @relation(fields: [supplierId], references: [id])
+  transactions InventoryTransaction[]
+
+  @@index([group])
+  @@map("inventory_items")
+}
+
+model InventoryTransaction {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  type             String // InventoryTxnType: IN | OUT | TRANSFER | FG_IN
+  inventoryItemId  String
+  orderId          String?
+  productionStepId String?
+  supplierId       String?
+  performedById    String?
+  quantity         Float
+  unitPrice        Float?
+  fromGroup        String?
+  toGroup          String?
+  note             String?
+  createdAt        DateTime @default(now())
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  supplier      Supplier?     @relation(fields: [supplierId], references: [id])
+  performedBy   User?         @relation(fields: [performedById], references: [id])
+
+  @@index([inventoryItemId])
+  @@index([orderId])
+  @@index([type])
+  @@map("inventory_transactions")
+}
+
+// ─── Nhật ký thao tác (append-only — không update/delete) ───────────────────
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  orderId    String?
+  action     String
+  objectType String
+  objectId   String?
+  oldValue   String? // JSON
+  newValue   String? // JSON
+  createdAt  DateTime @default(now())
+
+  user  User?  @relation(fields: [userId], references: [id])
+  order Order? @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([objectType, objectId])
+  @@map("activity_logs")
+}
+
+// ─── Cấu hình cột Kanban theo trạng thái đơn (Phase 006) ───────────────────
+model BoardColumn {
+  id        String   @id @default(cuid())
+  status    String   @unique // OrderStatus mà cột ánh xạ tới
+  label     String // tên hiển thị (đổi được)
+  position  Int      @default(0)
+  visible   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("board_columns")
+}
+
+// ─── Cấu hình & Tích hợp (Phase 005) ───────────────────────────────────────
+model Setting {
+  key       String   @id // tên tham số (vd laborCostPerStep)
+  value     String // JSON-serialized
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("settings")
+}
+
+model Integration {
+  id         String    @id @default(cuid())
+  name       String
+  provider   String // SHOPEE | LAZADA | TIKTOK | ACCOUNTING
+  status     String    @default("DISCONNECTED") // DISCONNECTED | CONNECTED
+  config     String? // JSON
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  logs IntegrationLog[]
+
+  @@map("integrations")
+}
+
+model IntegrationLog {
+  id            String   @id @default(cuid())
+  integrationId String
+  action        String // sync.orders | sync.accounting
+  status        String // OK | SKIPPED | ERROR
+  message       String?
+  ref           String? // idempotent key (vd ngày đồng bộ) — chống trùng
+  createdAt     DateTime @default(now())
+
+  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId])
+  @@map("integration_logs")
+}
+
+// ─── File / ảnh đính kèm ────────────────────────────────────────────────────
+model Attachment {
+  id           String   @id @default(cuid())
+  objectType   String // order | order_item | qc_record | production_step
+  objectId     String
+  fileUrl      String
+  fileType     String?
+  fileName     String?
+  sizeBytes    Int?
+  orderId      String?
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  order      Order? @relation(fields: [orderId], references: [id])
+  uploadedBy User?  @relation(fields: [uploadedById], references: [id])
+
+  @@index([objectType, objectId])
+  @@map("attachments")
+}

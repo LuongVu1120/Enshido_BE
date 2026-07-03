@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-50 text-slate-800 antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Thanh cuộn mảnh cho bảng/kanban */
+.scrollbar-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+}
+
+/* Ghi chú rich content (Phase 010) — dùng chung editor TipTap & khối hiển thị */
+.rich-content { @apply text-sm leading-relaxed text-slate-700; }
+.rich-content p { @apply my-1.5; }
+.rich-content ul { @apply my-1.5 list-disc pl-5; }
+.rich-content ol { @apply my-1.5 list-decimal pl-5; }
+.rich-content li { @apply my-0.5; }
+.rich-content h1 { @apply mt-2 mb-1 text-lg font-bold; }
+.rich-content h2 { @apply mt-2 mb-1 text-base font-bold; }
+.rich-content h3 { @apply mt-2 mb-1 text-sm font-bold; }
+.rich-content a { @apply text-brand-600 underline; }
+.rich-content blockquote { @apply my-1.5 border-l-4 border-slate-200 pl-3 text-slate-500; }
+.rich-content code { @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-xs; }
+.rich-content pre { @apply my-1.5 overflow-x-auto rounded bg-slate-100 p-2 font-mono text-xs; }
+.rich-content :is(p, ul, ol, h1, h2, h3):first-child { @apply mt-0; }
+/* Placeholder cho editor rỗng (TipTap Placeholder dùng data-placeholder) */
+.ProseMirror:focus { @apply outline-none; }
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  @apply pointer-events-none float-left h-0 text-slate-400;
+}
