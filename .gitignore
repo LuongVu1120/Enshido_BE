@@ -1,0 +1,23 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.log
+.DS_Store
+
+# env
+.env
+.env.local
+*.env
+
+# prisma local dev db
+api/prisma/dev.db
+api/prisma/dev.db-journal
+
+# local file storage (dev attachments)
+uploads/
+
+# turbo
+.turbo/
