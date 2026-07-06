@@ -56,7 +56,7 @@ export class InventoryService {
     if (params.group) where.group = params.group;
     if (params.supplierId) where.supplierId = params.supplierId;
     if (params.q)
-      where.OR = [{ code: { contains: params.q } }, { name: { contains: params.q } }];
+      where.OR = [{ code: { contains: params.q, mode: 'insensitive' as const } }, { name: { contains: params.q, mode: 'insensitive' as const } }];
 
     let [items, total] = await Promise.all([
       this.prisma.inventoryItem.findMany({
@@ -138,7 +138,7 @@ export class InventoryService {
   // ─── Suppliers ─────────────────────────────────────────────────────────────
   async listSuppliers(q?: string) {
     return this.prisma.supplier.findMany({
-      where: q ? { OR: [{ name: { contains: q } }, { code: { contains: q } }] } : {},
+      where: q ? { OR: [{ name: { contains: q, mode: 'insensitive' as const } }, { code: { contains: q, mode: 'insensitive' as const } }] } : {},
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { items: true } } },
     });

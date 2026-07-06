@@ -365,7 +365,7 @@ export class ProductionService {
       where: {
         status: { in: statuses },
         ...(filters.q
-          ? { OR: [{ code: { contains: filters.q } }, { name: { contains: filters.q } }, { customer: { name: { contains: filters.q } } }] }
+          ? { OR: [{ code: { contains: filters.q, mode: 'insensitive' as const } }, { name: { contains: filters.q, mode: 'insensitive' as const } }, { customer: { name: { contains: filters.q, mode: 'insensitive' as const } } }] }
           : {}),
       },
       include: {
@@ -405,7 +405,7 @@ export class ProductionService {
         status: { in: [OrderStatus.WAITING_PRODUCTION, OrderStatus.IN_PRODUCTION, OrderStatus.WAITING_QC, OrderStatus.NEEDS_REWORK, OrderStatus.QC_FAILED] },
         steps: { some: {} }, // chỉ đơn đã cấu hình công đoạn
         ...(filters.q
-          ? { OR: [{ code: { contains: filters.q } }, { name: { contains: filters.q } }, { customer: { name: { contains: filters.q } } }] }
+          ? { OR: [{ code: { contains: filters.q, mode: 'insensitive' as const } }, { name: { contains: filters.q, mode: 'insensitive' as const } }, { customer: { name: { contains: filters.q, mode: 'insensitive' as const } } }] }
           : {}),
       },
       include: {

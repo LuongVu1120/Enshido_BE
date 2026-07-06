@@ -118,10 +118,10 @@ export class OrdersService {
     }
     if (params.q) {
       where.OR = [
-        { code: { contains: params.q } },
-        { name: { contains: params.q } },
-        { customer: { name: { contains: params.q } } },
-        { items: { some: { productName: { contains: params.q } } } },
+        { code: { contains: params.q, mode: 'insensitive' as const } },
+        { name: { contains: params.q, mode: 'insensitive' as const } },
+        { customer: { name: { contains: params.q, mode: 'insensitive' as const } } },
+        { items: { some: { productName: { contains: params.q, mode: 'insensitive' as const } } } },
       ];
     }
     const [items, total] = await Promise.all([

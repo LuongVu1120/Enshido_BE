@@ -25,7 +25,7 @@ export class EmployeesService {
     const where: any = {};
     if (params.department) where.department = params.department;
     if (params.status) where.status = params.status;
-    if (params.q) where.OR = [{ name: { contains: params.q } }, { code: { contains: params.q } }];
+    if (params.q) where.OR = [{ name: { contains: params.q, mode: 'insensitive' as const } }, { code: { contains: params.q, mode: 'insensitive' as const } }];
 
     const [items, total, byDeptRaw] = await Promise.all([
       this.prisma.employee.findMany({

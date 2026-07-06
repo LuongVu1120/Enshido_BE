@@ -25,9 +25,9 @@ export class CustomersService {
     const where = q
       ? {
           OR: [
-            { name: { contains: q } },
-            { phone: { contains: q } },
-            { code: { contains: q } },
+            { name: { contains: q, mode: 'insensitive' as const } },
+            { phone: { contains: q, mode: 'insensitive' as const } },
+            { code: { contains: q, mode: 'insensitive' as const } },
           ],
         }
       : {};
