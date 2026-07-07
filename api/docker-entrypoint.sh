@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-# Áp migrations vào DB (SQLite file nằm ở volume /app/data, xem DATABASE_URL).
+# Áp migrations vào Postgres (Supabase). Cần DIRECT_URL đã set trong environment.
 npx prisma migrate deploy --schema=./prisma/schema.prisma
 
 exec "$@"

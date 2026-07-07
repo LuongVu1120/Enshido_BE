@@ -30,16 +30,17 @@ COPY --from=build /app/api/package.json ./api/package.json
 COPY --from=build /app/api/dist ./api/dist
 COPY --from=build /app/api/prisma ./api/prisma
 COPY api/docker-entrypoint.sh ./api/docker-entrypoint.sh
-RUN mkdir -p /app/api/uploads /app/data \
+RUN mkdir -p /app/api/uploads \
   && chmod +x /app/api/docker-entrypoint.sh
 
 WORKDIR /app/api
-ENV DATABASE_URL="file:/app/data/enshido.db" \
-  API_PORT=4000 \
+# DATABASE_URL / DIRECT_URL (Postgres/Supabase) phải truyền từ ngoài vào (docker-compose
+# environment hoặc secret của platform deploy) — không có default an toàn để hardcode.
+ENV API_PORT=4000 \
   STORAGE_DRIVER=disk
 
 EXPOSE 4000
-VOLUME ["/app/data", "/app/api/uploads"]
+VOLUME ["/app/api/uploads"]
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", "dist/main.js"]
