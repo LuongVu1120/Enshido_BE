@@ -1,7 +1,7 @@
 // ENSHIDO — Data model MVP (12 bảng, theo plan.md mục "Data Model").
 // Dev: SQLite (zero-infra). Prod: đổi provider = "postgresql" + DATABASE_URL Postgres,
 // rồi `prisma migrate dev` sinh migration cho Postgres. Các trường "enum" lưu dạng String
-// (validate ở code theo @enshido/types) để schema portable giữa SQLite ↔ Postgres.
+// (validate ở code theo @enshido/types) để schema portable giữa SQLite ↔ Postgres....
 
 generator client {
   provider = "prisma-client-js"
